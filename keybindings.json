@@ -1,0 +1,27 @@
+{
+  "_comment": "Cooperative Mode - Keybindings Configuration",
+  "_special_keys": "SPACE, ENTER, ESC, TAB, SHIFT, CTRL, ALT, LEFT_ARROW, UP_ARROW, RIGHT_ARROW, DOWN_ARROW",
+  "_joystick_note": "This mod currently supports keyboard only for player 2",
+  
+  "movement": {
+    "up": "I",
+    "down": "K",
+    "left": "J",
+    "right": "L"
+  },
+  
+  "combat": {
+    "skill1": "Y",
+    "skill2": "NUM6",
+    "skill3": "NUM5",
+    "skill4": "NUM4",
+    "skill5": "NUM7",
+    "skill6": "NUM8",
+    "dodge": "NUM3"
+  },
+  
+  "system": {
+    "toggle_control": "F2",
+    "force_enable": "F3"
+  }
+}

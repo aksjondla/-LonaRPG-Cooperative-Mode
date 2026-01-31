@@ -1,0 +1,257 @@
+=============================================================================
+Кооперативный режим - Руководство по настройке клавиш
+=============================================================================
+
+ОБЗОР:
+------
+Вы можете настроить все элементы управления Игрока 2, отредактировав keybindings.json
+Мод автоматически загрузит ваши пользовательские настройки клавиш при запуске.
+
+КАК РЕДАКТИРОВАТЬ:
+------------------
+1. Откройте keybindings.json с помощью любого текстового редактора (Notepad, VSCode и т.д.)
+2. Измените значения клавиш на предпочитаемые
+3. Сохраните файл
+4. Запустите игру
+
+ДОСТУПНЫЕ КЛАВИШИ:
+------------------
+Буквы: A-Z (заглавные или строчные, оба варианта работают)
+Цифры (верхний ряд): NUM0, NUM1, NUM2, NUM3, NUM4, NUM5, NUM6, NUM7, NUM8, NUM9
+Цифровая клавиатура: NUMPAD0, NUMPAD1, NUMPAD2, ... NUMPAD9
+Функциональные клавиши: F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12
+Специальные: SPACE, ENTER, ESC, TAB, BACKSPACE
+Модификаторы: SHIFT, CTRL, ALT
+Стрелки: LEFT_ARROW, UP_ARROW, RIGHT_ARROW, DOWN_ARROW
+
+ВАЖНО: Для цифровых клавиш 0-9 всегда используйте префикс NUM (например, NUM4, а не просто 4)
+Если используются стрелки, Игрок 1 должен отключить эти клавиши в меню настроек игры
+
+ПРИМЕРЫ КОНФИГУРАЦИЙ:
+---------------------
+
+Пример 1: Движение WASD
+  "movement": {
+    "up": "W",
+    "down": "S",
+    "left": "A",
+    "right": "D"
+  }
+
+Пример 2: Стрелки + ZXC
+  "movement": {
+    "up": "UP_ARROW",
+    "down": "DOWN_ARROW",
+    "left": "LEFT_ARROW",
+    "right": "RIGHT_ARROW"
+  },
+  "combat": {
+    "skill1": "Z",
+    "skill2": "X",
+    "skill3": "C",
+    "skill4": "V",
+    "skill5": "B",
+    "skill6": "N",
+    "dodge": "M"
+  }
+
+КОНФИГУРАЦИЯ ПО УМОЛЧАНИЮ:
+--------------------------
+{
+  "movement": {
+    "up": "I",
+    "down": "K",
+    "left": "J",
+    "right": "L"
+  },
+  "combat": {
+    "skill1": "Y",
+    "skill2": "NUM6",
+    "skill3": "NUM5",
+    "skill4": "NUM4",
+    "skill5": "NUM7",
+    "skill6": "NUM8",
+    "dodge": "NUM3"
+  },
+  "system": {
+    "toggle_control": "F2",
+    "force_enable": "F3"
+  }
+}
+
+ОБЪЯСНЕНИЕ СИСТЕМНЫХ КЛАВИШ:
+-----------------------------
+F2 (toggle_control): Переключение между ИИ и ручным управлением
+F3 (force_enable): Включает кооперативный режим (полезно при загрузке сохранённых игр)
+
+=============================================================================
+Cooperative Mode - Keybindings Configuration Guide
+=============================================================================
+
+OVERVIEW:
+---------
+You can customize all Player 2 controls by editing keybindings.json
+The mod will automatically load your custom keybindings when it starts.
+
+HOW TO EDIT:
+------------
+1. Open keybindings.json with any text editor (Notepad, VSCode, etc.)
+2. Change the key values to your preferred keys
+3. Save the file
+4. Start the game
+
+AVAILABLE KEYS:
+---------------
+Letters: A-Z (uppercase or lowercase, both work)
+Numbers (top row): NUM0, NUM1, NUM2, NUM3, NUM4, NUM5, NUM6, NUM7, NUM8, NUM9
+Numpad: NUMPAD0, NUMPAD1, NUMPAD2, ... NUMPAD9
+Function keys: F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12
+Special: SPACE, ENTER, ESC, TAB, BACKSPACE
+Modifiers: SHIFT, CTRL, ALT
+Arrows: LEFT_ARROW, UP_ARROW, RIGHT_ARROW, DOWN_ARROW
+
+IMPORTANT: For number keys 0-9, always use NUM prefix (e.g., NUM4, not just 4)
+If using arrows, Player one has to unbind these keys from the game's configuration menu
+
+EXAMPLE CONFIGURATIONS:
+-----------------------
+
+Example 1: WASD Movement
+  "movement": {
+    "up": "W",
+    "down": "S",
+    "left": "A",
+    "right": "D"
+  }
+
+Example 2: Arrow Keys + ZXC
+  "movement": {
+    "up": "UP_ARROW",
+    "down": "DOWN_ARROW",
+    "left": "LEFT_ARROW",
+    "right": "RIGHT_ARROW"
+  },
+  "combat": {
+    "skill1": "Z",
+    "skill2": "X",
+    "skill3": "C",
+    "skill4": "V",
+    "skill5": "B",
+    "skill6": "N",
+    "dodge": "M"
+  }
+
+DEFAULT CONFIGURATION:
+----------------------
+{
+  "movement": {
+    "up": "I",
+    "down": "K",
+    "left": "J",
+    "right": "L"
+  },
+  "combat": {
+    "skill1": "Y",
+    "skill2": "NUM6",
+    "skill3": "NUM5",
+    "skill4": "NUM4",
+    "skill5": "NUM7",
+    "skill6": "NUM8",
+    "dodge": "NUM3"
+  },
+  "system": {
+    "toggle_control": "F2",
+    "force_enable": "F3"
+  }
+}
+
+SYSTEM KEYS EXPLANATION:
+------------------------
+F2 (toggle_control): Switches between AI and manual control
+F3 (force_enable): Enables co-op mode (useful when loading saved games)
+
+=============================================================================
+Modo Cooperativo - Guía de Configuración de Teclas
+=============================================================================
+
+DESCRIPCIÓN GENERAL:
+--------------------
+Puedes personalizar todos los controles del Jugador 2 editando keybindings.json
+El mod cargará automáticamente tus teclas personalizadas al iniciarse.
+
+CÓMO EDITAR:
+------------
+1. Abre keybindings.json con cualquier editor de texto (Notepad, VSCode, etc.)
+2. Cambia los valores de las teclas por tus teclas preferidas
+3. Guarda el archivo
+4. Inicia el juego
+
+TECLAS DISPONIBLES:
+-------------------
+Letras: A-Z (mayúsculas o minúsculas, ambas funcionan)
+Números (fila superior): NUM0, NUM1, NUM2, NUM3, NUM4, NUM5, NUM6, NUM7, NUM8, NUM9
+Teclado numérico: NUMPAD0, NUMPAD1, NUMPAD2, ... NUMPAD9
+Teclas de función: F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12
+Especiales: SPACE, ENTER, ESC, TAB, BACKSPACE
+Modificadores: SHIFT, CTRL, ALT
+Flechas: LEFT_ARROW, UP_ARROW, RIGHT_ARROW, DOWN_ARROW
+
+IMPORTANTE: Para las teclas numéricas 0-9, siempre usa el prefijo NUM (ej. NUM4, no solo 4)
+Si usas las flechas, el Jugador 1 debe desactivar estas teclas desde el menú de configuración del juego
+
+EJEMPLOS DE CONFIGURACIONES:
+----------------------------
+
+Ejemplo 1: Movimiento WASD
+  "movement": {
+    "up": "W",
+    "down": "S",
+    "left": "A",
+    "right": "D"
+  }
+
+Ejemplo 2: Flechas + ZXC
+  "movement": {
+    "up": "UP_ARROW",
+    "down": "DOWN_ARROW",
+    "left": "LEFT_ARROW",
+    "right": "RIGHT_ARROW"
+  },
+  "combat": {
+    "skill1": "Z",
+    "skill2": "X",
+    "skill3": "C",
+    "skill4": "V",
+    "skill5": "B",
+    "skill6": "N",
+    "dodge": "M"
+  }
+
+CONFIGURACIÓN POR DEFECTO:
+--------------------------
+{
+  "movement": {
+    "up": "I",
+    "down": "K",
+    "left": "J",
+    "right": "L"
+  },
+  "combat": {
+    "skill1": "Y",
+    "skill2": "NUM6",
+    "skill3": "NUM5",
+    "skill4": "NUM4",
+    "skill5": "NUM7",
+    "skill6": "NUM8",
+    "dodge": "NUM3"
+  },
+  "system": {
+    "toggle_control": "F2",
+    "force_enable": "F3"
+  }
+}
+
+EXPLICACIÓN DE TECLAS DEL SISTEMA:
+-----------------------------------
+F2 (toggle_control): Alterna entre control de IA y control manual
+F3 (force_enable): Activa el modo cooperativo (útil al cargar partidas guardadas)
