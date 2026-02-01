@@ -5,7 +5,244 @@
 # Uses Windows API for key detection
 #==============================================================================
 
+#==============================================================================
+# Cooperative Mode - Named Pipe input bridge (Host -> Ruby)
+#==============================================================================
+# Receives snapshots from the C# Host over a named pipe.
+# Packet format (inside the pipe frame):
+#   [4B magic "LCO1"][1B version][1B count][2B reserved]
+#   repeated records (16 bytes):
+#     pid(u16), npc(u16), seq(u32), keysLo(u32), keysHi(u32)
+# Pipe framing:
+#   [u16 length][payload...]
+#==============================================================================
+
+module CoopPipe
+  PIPE_NAME = "\\\\.\\pipe\\LCOInput"
+  MAGIC = "LCO1"
+  VERSION = 1
+  MAX_READ = 16384
+  TIMEOUT_FRAMES = 10 # ~0.16s at 60fps
+  DEBUG = true
+  DEBUG_EVERY = 30 # frames
+
+  GENERIC_READ = 0x80000000
+  OPEN_EXISTING = 3
+  FILE_ATTRIBUTE_NORMAL = 0x80
+  INVALID_HANDLE_VALUE = 0xFFFFFFFF
+
+  @@handle = nil
+  @@buf = ""
+  @@last_packet_frame = -1
+  @@players = {}
+  @@active_pid = nil
+  @@logged_connected = false
+  @@debug_counter = 0
+  @@last_bytes_read = 0
+  @@last_packets_parsed = 0
+  @@last_mask = 0
+  @@last_seq = 0
+
+  @@create_file = Win32API.new('kernel32', 'CreateFileA', 'PLLPLLL', 'L')
+  @@read_file = Win32API.new('kernel32', 'ReadFile', 'LPLPP', 'I')
+  @@peek_pipe = Win32API.new('kernel32', 'PeekNamedPipe', 'LPLPPP', 'I')
+  @@wait_pipe = Win32API.new('kernel32', 'WaitNamedPipeA', 'PL', 'I')
+  @@close_handle = Win32API.new('kernel32', 'CloseHandle', 'L', 'I')
+
+  def self.connect
+    return if @@handle
+
+    @@wait_pipe.call(PIPE_NAME, 0) rescue nil
+    handle = @@create_file.call(PIPE_NAME, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0)
+    if handle == INVALID_HANDLE_VALUE || handle == -1 || handle == 0
+      @@handle = nil
+    else
+      @@handle = handle
+      @@buf = ""
+      unless @@logged_connected
+        p "CoopPipe: connected to #{PIPE_NAME}"
+        @@logged_connected = true
+      end
+    end
+  rescue => e
+    @@handle = nil
+  end
+
+  def self.disconnect
+    if @@handle
+      @@close_handle.call(@@handle) rescue nil
+    end
+    @@handle = nil
+    @@buf = ""
+    @@logged_connected = false
+  end
+
+  def self.poll
+    connect if @@handle.nil?
+    return unless @@handle
+
+    read_available
+    parse_buffer
+    debug_log
+  end
+
+  def self.read_available
+    @@last_bytes_read = 0
+    loop do
+      avail = [0].pack('L')
+      dummy = "\0"
+      read = [0].pack('L')
+
+      ok = @@peek_pipe.call(@@handle, dummy, 1, read, avail, 0)
+      if ok == 0
+        disconnect
+        return
+      end
+
+      bytes_avail = avail.unpack('L')[0]
+      break if bytes_avail <= 0
+
+      to_read = [bytes_avail, MAX_READ].min
+      buf = "\0" * to_read
+      read = [0].pack('L')
+      ok = @@read_file.call(@@handle, buf, to_read, read, 0)
+      if ok == 0
+        disconnect
+        return
+      end
+
+      count = read.unpack('L')[0]
+      break if count <= 0
+
+      @@buf << buf[0, count]
+      @@last_bytes_read += count
+    end
+  rescue => e
+    disconnect
+  end
+
+  def self.parse_buffer
+    @@last_packets_parsed = 0
+    loop do
+      break if @@buf.bytesize < 2
+      len = @@buf.unpack('v')[0]
+      break if @@buf.bytesize < (2 + len)
+      payload = @@buf[2, len]
+      @@buf = @@buf[(2 + len)..-1] || ""
+      apply_snapshot(payload)
+      @@last_packets_parsed += 1
+    end
+  end
+
+  def self.apply_snapshot(data)
+    return if data.nil? || data.bytesize < 8
+    return unless data[0, 4] == MAGIC
+
+    ver = data.getbyte(4)
+    return unless ver == VERSION
+
+    count = data.getbyte(5)
+    off = 8
+    now = current_frame
+    players = {}
+
+    count.times do
+      break if off + 16 > data.bytesize
+      pid, npc, seq, lo, hi = data[off, 16].unpack('vvVVV')
+      off += 16
+      mask = lo | (hi << 32)
+      players[pid] = { npc: npc, seq: seq, mask: mask, seen: now }
+    end
+
+    @@players = players
+    @@last_packet_frame = now
+    if players.size > 0
+      if @@active_pid.nil? || !players.key?(@@active_pid)
+        @@active_pid = players.keys.min
+      end
+    end
+
+    if @@active_pid && @@players[@@active_pid]
+      @@last_mask = @@players[@@active_pid][:mask] || 0
+      @@last_seq = @@players[@@active_pid][:seq] || 0
+    end
+  end
+
+  def self.active?
+    return false if @@last_packet_frame < 0
+    now = current_frame
+    (now - @@last_packet_frame) <= TIMEOUT_FRAMES
+  end
+
+  def self.connected?
+    !@@handle.nil?
+  end
+
+  def self.mask(pid = nil)
+    return 0 unless active?
+    return 0 if @@players.nil? || @@players.empty?
+    if pid && @@players[pid]
+      @@players[pid][:mask] || 0
+    else
+      if @@active_pid && @@players[@@active_pid]
+        @@players[@@active_pid][:mask] || 0
+      else
+        0
+      end
+    end
+  end
+
+  def self.active_pid
+    @@active_pid
+  end
+
+  def self.set_active_pid(pid)
+    @@active_pid = pid
+  end
+
+  def self.current_frame
+    if defined?(Graphics) && Graphics.respond_to?(:frame_count)
+      Graphics.frame_count
+    else
+      0
+    end
+  end
+
+  def self.debug_log
+    return unless DEBUG
+    @@debug_counter += 1
+    return unless (@@debug_counter % DEBUG_EVERY) == 0
+
+    frame = current_frame
+    connected = connected? ? "yes" : "no"
+    active = active? ? "yes" : "no"
+    pid = @@active_pid || 0
+    mask_hex = sprintf("0x%016X", @@last_mask)
+    seq = @@last_seq
+    buf_size = @@buf.bytesize
+    players_count = @@players ? @@players.size : 0
+    p "CoopPipe dbg frame=#{frame} conn=#{connected} act=#{active} read=#{@@last_bytes_read} buf=#{buf_size} pkts=#{@@last_packets_parsed} players=#{players_count} pid=#{pid} seq=#{seq} mask=#{mask_hex}"
+  end
+end
+
 module CoopInput
+  # Network bit mapping (matches the client app)
+  # bits: 0=W,1=A,2=S,3=D,4=Shift,5=Ctrl,6=Alt,7=Space,
+  #       8=Q,9=E,10=R,11=F,12=1,13=2,14=3
+  NET_BITS = {
+    up: 0,
+    left: 1,
+    down: 2,
+    right: 3,
+    dodge: 4,
+    skill1: 8,
+    skill2: 9,
+    skill3: 10,
+    skill4: 11,
+    skill5: 12,
+    skill6: 13
+  }
+
   # Virtual Key codes for Windows (comprehensive list)
   VK_CODES = {
     # Letters A-Z
@@ -65,11 +302,42 @@ module CoopInput
   # Update key states each frame
   def self.update
     initialize_input unless @@initialized
-    
-    if @@use_win32 && @@get_async_key_state
 
+    CoopPipe.poll
+    if CoopPipe.connected?
+      update_from_network
+    else
+      update_from_local
+    end
+  rescue => e
+    p "CoopInput: Error in update - #{e.message}"
+  end
+
+  def self.update_from_network
+    keys = CoopConfig.keys
+    mask = CoopPipe.mask
+
+    keys.each do |action, key_symbol|
+      @@prev_states[key_symbol] = @@key_states[key_symbol] || false
+      bit = NET_BITS[action]
+      if bit
+        @@key_states[key_symbol] = ((mask >> bit) & 1) == 1
+      elsif @@use_win32 && @@get_async_key_state
+        vk_code = get_vk_code(key_symbol)
+        if vk_code
+          @@key_states[key_symbol] = (@@get_async_key_state.call(vk_code) & 0x8000) != 0
+        else
+          @@key_states[key_symbol] = false
+        end
+      else
+        @@key_states[key_symbol] = false
+      end
+    end
+  end
+
+  def self.update_from_local
+    if @@use_win32 && @@get_async_key_state
       keys = CoopConfig.keys
-      
 
       keys.each do |action, key_symbol|
         @@prev_states[key_symbol] = @@key_states[key_symbol] || false
@@ -84,8 +352,6 @@ module CoopInput
       @@prev_states[toggle_key] = @@key_states[toggle_key] || false
       @@key_states[toggle_key] = Input.trigger?(:F5)
     end
-  rescue => e
-    p "CoopInput: Error in update - #{e.message}"
   end
   
   def self.press?(key)

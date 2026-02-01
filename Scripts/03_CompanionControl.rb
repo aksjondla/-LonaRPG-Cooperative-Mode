@@ -9,6 +9,7 @@ module CompanionControl
   @@controlled_companion = nil
   @@debug_counter = 0
   @@original_move_type = nil
+  @@pipe_forced = false
   
   # Find any active companion (type front or type back)
   def self.find_front_companion
@@ -93,6 +94,25 @@ module CompanionControl
     begin
       # Always update input to detect F2 and F3
       CoopInput.update
+
+      if defined?(CoopPipe) && CoopPipe.connected?
+        unless @@pipe_forced
+          companion = find_front_companion
+          if companion
+            unless CoopConfig.enabled?
+              CoopConfig.enable
+              CoopConfig.show_control_message(CoopTranslations.t(:coop_enabled))
+            end
+            if CoopConfig.enabled? && !CoopConfig.manual_control?
+              disable_companion_ai(companion)
+              CoopConfig.toggle_control_mode
+            end
+            @@pipe_forced = true
+          end
+        end
+      else
+        @@pipe_forced = false
+      end
       
       if CoopInput.trigger?(:force_enable)
         unless CoopConfig.enabled?
