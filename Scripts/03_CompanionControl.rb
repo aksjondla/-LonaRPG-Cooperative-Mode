@@ -176,7 +176,6 @@ module CompanionControl
 
     # Block movement when the game itself blocks it (stun/skill/cast/animation/grab/etc).
     blocked = false
-    blocked ||= companion.respond_to?(:moving?) && companion.moving?
     blocked ||= companion.respond_to?(:animation) && companion.animation
     blocked ||= companion.respond_to?(:skill_eff_reserved) && companion.skill_eff_reserved
     blocked ||= companion.respond_to?(:grabbed?) && companion.grabbed?
@@ -191,6 +190,20 @@ module CompanionControl
         # Turn first like in original game input: require a small hold to start moving.
         current_dir = companion.direction if companion.respond_to?(:direction)
         count = companion.instance_variable_get(:@dirInputCount) || 0
+        delay = System_Settings::GAME_DIR_INPUT_DELAY rescue 0
+
+        if companion.respond_to?(:moving?) && companion.moving?
+          # Если уже движется, не поворачиваем в сторону (чтобы не было "бокового" взгляда в анимации).
+          # Запоминаем, что новое направление можно применить сразу после остановки.
+          if current_dir && direction != current_dir
+            begin
+              companion.instance_variable_set(:@dirInputCount, delay + 1)
+            rescue
+            end
+          end
+          return
+        end
+
         if current_dir && direction == current_dir && count == 0
           companion.direction = direction if companion.respond_to?(:direction=)
           companion.move_straight(direction)
@@ -198,7 +211,6 @@ module CompanionControl
           count += 1
           companion.instance_variable_set(:@dirInputCount, count)
           companion.direction = direction if companion.respond_to?(:direction=)
-          delay = System_Settings::GAME_DIR_INPUT_DELAY rescue 0
           companion.move_straight(direction) if count > delay
         end
       rescue
