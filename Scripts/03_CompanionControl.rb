@@ -168,16 +168,47 @@ module CompanionControl
   
   # Handle companion movement
   def self.update_companion_movement
-    return if @@controlled_companion.moving?
-    
     direction = CoopInput.get_direction
-    
-    if direction != 0
+    companion = @@controlled_companion
+    return unless companion
+
+    npc = companion.respond_to?(:npc) ? companion.npc : nil
+
+    # Block movement when the game itself blocks it (stun/skill/cast/animation/grab/etc).
+    blocked = false
+    blocked ||= companion.respond_to?(:moving?) && companion.moving?
+    blocked ||= companion.respond_to?(:animation) && companion.animation
+    blocked ||= companion.respond_to?(:skill_eff_reserved) && companion.skill_eff_reserved
+    blocked ||= companion.respond_to?(:grabbed?) && companion.grabbed?
+    blocked ||= npc && ![nil, :none].include?(npc.action_state)
+
+    if direction != 0 && !blocked
       if @@debug_counter % 60 == 0
         p "Direction: #{direction}, moving..."
       end
-      
-      @@controlled_companion.move_straight(direction)
+
+      begin
+        # Turn first like in original game input: require a small hold to start moving.
+        current_dir = companion.direction if companion.respond_to?(:direction)
+        count = companion.instance_variable_get(:@dirInputCount) || 0
+        if current_dir && direction == current_dir && count == 0
+          companion.direction = direction if companion.respond_to?(:direction=)
+          companion.move_straight(direction)
+        else
+          count += 1
+          companion.instance_variable_set(:@dirInputCount, count)
+          companion.direction = direction if companion.respond_to?(:direction=)
+          delay = System_Settings::GAME_DIR_INPUT_DELAY rescue 0
+          companion.move_straight(direction) if count > delay
+        end
+      rescue
+        companion.move_straight(direction)
+      end
+    else
+      begin
+        companion.instance_variable_set(:@dirInputCount, 0)
+      rescue
+      end
     end
   end
   
