@@ -1,19 +1,35 @@
 #==============================================================================
-# Cooperative Mode - Companion Control System
+# Cooperative Mode - Companion Control
 #==============================================================================
-# Handles manual control of the companion by Player 2
-# Disables companion AI when in manual control mode
+# Player 2 manual control; disables companion AI when active.
 #==============================================================================
 
 module CompanionControl
+  MALE_COMPANION_NAMES = %w[
+    UniqueGrayRat UniqueDavidBorn UniquePigBobo UniqueMilo UniqueAdam
+    UniqueCaptainEdward UniqueHappyMerchant UniqueDirtyJohnson UniqueGangBoss UniqueOgreWarBoss
+    CompOrkindSlayer CompHumanWarrior CompHumanExplorer CompHumanBow CompHumanSpear
+    CompHumanScout CompElfArcher CompFishShaman CompFishGuard CompNinjaKiller
+  ]
+
   @@controlled_companion = nil
   @@debug_counter = 0
   @@original_move_type = nil
-  @@last_reported_target = nil  # for "Objetivo válido obtenido" message (avoid spam)
-  @@projectile_no_target_balloon_shown = false  # show "?" only once until they get a target
-  @@companion_index = 0  # 0 = front, 1 = back; Player 2 cycles with cycle_companion key
-  
-  # Returns the companion event at slot index (0 = front, 1 = back), or nil if none at that slot.
+  @@last_reported_target = nil
+  @@projectile_no_target_balloon_shown = false
+  @@companion_index = 0
+
+  def self.companion_event_name(companion)
+    return nil unless companion && companion.respond_to?(:instance_variable_get)
+    companion.instance_variable_get(:@event).name rescue nil
+  end
+
+  def self.male_companion?(companion)
+    name = companion_event_name(companion)
+    return false if name.nil? || name.empty?
+    MALE_COMPANION_NAMES.include?(name)
+  end
+
   def self.find_companion_at_index(index)
     return nil unless $game_player && $game_map && $game_map.events
     name = (index == 0) ? ($game_player.record_companion_name_front rescue nil) : ($game_player.record_companion_name_back rescue nil)
@@ -26,7 +42,6 @@ module CompanionControl
     end
   end
   
-  # Currently selected companion for Player 2 control (by index). Falls back to other slot if current has none.
   def self.find_front_companion
     return nil unless $game_player
     @@debug_counter += 1
@@ -41,25 +56,18 @@ module CompanionControl
     nil
   end
   
-  # Expose for hooks: the one companion Player 2 is controlling this frame.
   def self.controlled_companion_event
     @@controlled_companion
   end
   
-  # Disable companion AI movement (targeting is left to the AI so companion can get @target for projectiles)
   def self.disable_companion_ai(companion)
-    return unless companion
-    return unless companion.respond_to?(:get_manual_move_type)
-    
+    return unless companion && companion.respond_to?(:get_manual_move_type)
     if @@original_move_type.nil?
       @@original_move_type = companion.get_manual_move_type
       companion.set_manual_move_type(nil)
-      # Do NOT clear @target: we let the AI handle targeting so the companion can acquire a valid target for projectile skills.
-      # Only block movement; update_npc_sensor still runs so sense_target can set @target.
     end
   end
-  
-  # Re-enable companion AI movement
+
   def self.enable_companion_ai(companion)
     return unless companion
     return unless companion.respond_to?(:set_manual_move_type)
@@ -71,10 +79,8 @@ module CompanionControl
     end
   end
   
-  # Main update loop
   def self.update
     begin
-      # Always update input to detect F2 and F3
       CoopInput.update
       
       if CoopInput.trigger?(:force_enable)
@@ -91,7 +97,6 @@ module CompanionControl
         end
       end
       
-      # Toggle control mode with F2
       if CoopInput.trigger?(:toggle_control)
         if CoopConfig.enabled?
           companion = find_front_companion
@@ -111,7 +116,6 @@ module CompanionControl
       
       @@controlled_companion = find_front_companion
       
-      # Cycle which companion Player 2 controls (F4 by default)
       if @@controlled_companion && CoopInput.trigger?(:cycle_companion)
         old_companion = @@controlled_companion
         @@companion_index = (@@companion_index + 1) % 2
@@ -141,29 +145,53 @@ module CompanionControl
     end
   end
   
-  # Stop the game from showing "?" (balloon 2) repeatedly when companion has no target (alert_level 1 from sensor).
   def self.suppress_no_target_balloon
-    return unless @@controlled_companion
-    return unless @@controlled_companion.respond_to?(:npc) && @@controlled_companion.npc
+    return unless @@controlled_companion && @@controlled_companion.respond_to?(:npc) && @@controlled_companion.npc
     npc = @@controlled_companion.npc
     tgt = npc.instance_variable_get(:@target) rescue nil
     return if tgt && !(tgt.respond_to?(:deleted?) && tgt.deleted?) &&
               !(tgt.respond_to?(:actor) && tgt.actor && tgt.actor.action_state == :death)
-    # No valid target: clear balloon 2 so "?" doesn't repeat from game's alert_level 1
     if @@controlled_companion.balloon_id == 2
       @@controlled_companion.balloon_id = 0
     end
     npc.instance_variable_set(:@balloon, 0) if npc.instance_variable_get(:@balloon) == 2
   end
-  
-  # Handle companion movement
+
   def self.update_companion_movement
-    return if @@controlled_companion.moving?
-    
     direction = CoopInput.get_direction
-    
-    if direction != 0
-      @@controlled_companion.move_straight(direction)
+    companion = @@controlled_companion
+    return unless companion
+    npc = companion.respond_to?(:npc) ? companion.npc : nil
+    blocked = false
+    blocked ||= companion.respond_to?(:animation) && companion.animation
+    blocked ||= companion.respond_to?(:skill_eff_reserved) && companion.skill_eff_reserved
+    blocked ||= companion.respond_to?(:grabbed?) && companion.grabbed?
+    blocked ||= npc && ![nil, :none].include?(npc.action_state)
+    if direction != 0 && !blocked
+      begin
+        current_dir = companion.direction if companion.respond_to?(:direction)
+        count = companion.instance_variable_get(:@dirInputCount) || 0
+        delay = System_Settings::GAME_DIR_INPUT_DELAY rescue 0
+        if companion.respond_to?(:moving?) && companion.moving?
+          if current_dir && direction != current_dir
+            companion.instance_variable_set(:@dirInputCount, delay + 1) rescue nil
+          end
+          return
+        end
+        if current_dir && direction == current_dir && count == 0
+          companion.direction = direction if companion.respond_to?(:direction=)
+          companion.move_straight(direction)
+        else
+          count += 1
+          companion.instance_variable_set(:@dirInputCount, count)
+          companion.direction = direction if companion.respond_to?(:direction=)
+          companion.move_straight(direction) if count > delay
+        end
+      rescue
+        companion.move_straight(direction)
+      end
+    else
+      companion.instance_variable_set(:@dirInputCount, 0) rescue nil
     end
   end
   
@@ -192,12 +220,30 @@ module CompanionControl
       perform_companion_attack(5)
     end
     
+    if CoopInput.trigger?(:skill_grab)
+      perform_companion_grab
+    end
     if CoopInput.trigger?(:dodge)
       perform_companion_dodge
     end
   end
-  
-  # When the AI has given the companion a valid target, show "Objetivo válido obtenido" once per target.
+
+  def self.perform_companion_grab
+    return unless @@controlled_companion && @@controlled_companion.respond_to?(:npc)
+    return unless male_companion?(@@controlled_companion)
+    return if @@controlled_companion.respond_to?(:moving?) && @@controlled_companion.moving?
+    npc = @@controlled_companion.npc
+    return unless npc
+    return if npc.action_state == :skill
+    grab_skill = defined?($data_arpgskills) && $data_arpgskills["NpcFuckerGrab"]
+    return unless grab_skill
+    begin
+      npc.launch_skill(grab_skill, true)
+    rescue NoMethodError, ArgumentError, NameError
+    rescue => e
+    end
+  end
+
   def self.update_companion_target_message
     return unless @@controlled_companion
     return unless @@controlled_companion.respond_to?(:npc) && @@controlled_companion.npc
@@ -213,7 +259,7 @@ module CompanionControl
     
     return if @@last_reported_target == tgt
     @@last_reported_target = tgt
-    @@projectile_no_target_balloon_shown = false  # allow "?" again if they lose target later
+    @@projectile_no_target_balloon_shown = false
     if $game_map && $game_map.interpreter
       $game_map.interpreter.call_msg_popup(CoopTranslations.t(:target_acquired)) rescue nil
     end
@@ -221,21 +267,14 @@ module CompanionControl
   
   def self.perform_companion_attack(skill_index = 0)
     begin
-      return unless @@controlled_companion
-      return unless @@controlled_companion.respond_to?(:npc)
-      
+      return unless @@controlled_companion && @@controlled_companion.respond_to?(:npc)
+      return if @@controlled_companion.respond_to?(:moving?) && @@controlled_companion.moving?
       npc = @@controlled_companion.npc
       return unless npc
-      return if npc.action_state == :skill  # Already attacking
-      
+      return if npc.action_state == :skill
       skills_list = npc.skills_killer rescue []
-      
       skill = skills_list[skill_index] if skills_list && skill_index < skills_list.length
-      
       return unless skill
-      
-      # Projectile/ranged skills need a valid @target (set by AI) or the game can crash.
-      # Allow all ranged skills (Cocona, Musketeer, etc.) when the companion has a target.
       if ranged_skill?(skill)
         tgt = npc.instance_variable_get(:@target) rescue nil
         if tgt.nil? || (tgt.respond_to?(:deleted?) && tgt.deleted?) ||
@@ -245,13 +284,12 @@ module CompanionControl
             if $game_map && $game_map.interpreter
               $game_map.interpreter.call_msg_popup(CoopTranslations.t(:projectile_needs_target)) rescue nil
             end
-            @@controlled_companion.call_balloon(2, 0) rescue nil  # 0 = single show, not 30 seconds repeat
+            @@controlled_companion.call_balloon(2, 0) rescue nil
           end
           return
         end
       end
 
-      # Limit summon undead (e.g. Cocona skeletons) to 5 active to avoid game crash
       if summon_undead_skill?(skill) && count_active_undead_for(@@controlled_companion) >= 5
         if $game_map && $game_map.interpreter
           $game_map.interpreter.call_msg_popup(CoopTranslations.t(:max_skeletons)) rescue nil
@@ -271,7 +309,6 @@ module CompanionControl
     end
   end
   
-  # True if the controlled companion is a BACK slot companion
   def self.back_companion?
     return false unless @@controlled_companion && $game_player
     companion_name_back = $game_player.record_companion_name_back rescue nil
@@ -300,7 +337,6 @@ module CompanionControl
     summon_skills.include?(skill)
   end
 
-  # Count active undead (skeletons) summoned by this companion event ($game_map.npcs are Game_Event)
   def self.count_active_undead_for(companion_event)
     return 0 unless companion_event && $game_map && $game_map.respond_to?(:npcs)
     count = 0
@@ -315,7 +351,6 @@ module CompanionControl
     count
   end
   
-  # Execute companion dodge
   def self.perform_companion_dodge
     return unless @@controlled_companion
     return unless @@controlled_companion.respond_to?(:map_token)
@@ -326,19 +361,13 @@ module CompanionControl
   
 end
 
-#==============================================================================
-# Game_Event Hook - Disable AI during manual control
-#==============================================================================
-
+#----------------------------------------------------------------------------
+# Game_Event: block movement for controlled companion only
+#----------------------------------------------------------------------------
 class Game_Event < Game_Character
   alias_method :coop_original_update_self_movement, :update_self_movement unless method_defined?(:coop_original_update_self_movement)
-  
   def update_self_movement
-    return coop_original_update_self_movement if @missile
-    
-    return coop_original_update_self_movement unless @event
-    
-    # Only block movement for the one companion Player 2 is currently controlling; others use AI.
+    return coop_original_update_self_movement if @missile || !@event
     begin
       if CoopConfig.manual_control? && CompanionControl.controlled_companion_event == self
         return
@@ -349,21 +378,15 @@ class Game_Event < Game_Character
     coop_original_update_self_movement
   end
   
-  # Allow AI targeting when under manual control (sensor runs so companion can get @target for projectile skills)
   alias_method :coop_original_update_npc_sensor, :update_npc_sensor unless method_defined?(:coop_original_update_npc_sensor)
-  
   def update_npc_sensor
     coop_original_update_npc_sensor
   end
 end
 
-#==============================================================================
-# Game_NonPlayerCharacter Hook - Block AI skill choice when Player 2 controls the companion
-#==============================================================================
-# Target is still set by the AI (sensor); only the decision to launch a skill is blocked
-# so that Player 2's key presses (skill1..skill6) are the only way to use skills.
-#==============================================================================
-
+#----------------------------------------------------------------------------
+# Game_NonPlayerCharacter: block AI skill launch when P2 controls; sensor still sets target
+#----------------------------------------------------------------------------
 class Game_NonPlayerCharacter
   alias_method :coop_original_process_killer, :process_killer unless method_defined?(:coop_original_process_killer)
   def process_killer(target, distance, signal, sensor_type)
@@ -384,10 +407,9 @@ class Game_NonPlayerCharacter
   end
 end
 
-#==============================================================================
-# Scene_Map Hook - Update control system each frame
-#==============================================================================
-
+#----------------------------------------------------------------------------
+# Scene_Map: run CompanionControl.update each frame
+#----------------------------------------------------------------------------
 class Scene_Map
   alias_method :coop_original_update, :update unless method_defined?(:coop_original_update)
   
@@ -404,17 +426,13 @@ class Scene_Map
   end
 end
 
-#==============================================================================
-# Game_Player Hook - Auto-enable on companion hire/dismiss
-#==============================================================================
-
+#----------------------------------------------------------------------------
+# Game_Player: auto-enable coop on hire, disable when all dismissed
+#----------------------------------------------------------------------------
 class Game_Player
   alias_method :coop_original_set_companion_front, :record_companion_name_front= unless method_defined?(:coop_original_set_companion_front)
-  
   def record_companion_name_front=(name)
     coop_original_set_companion_front(name)
-    
-    # Auto-enable when companion is hired
     if name && !name.empty?
       unless CoopConfig.enabled?
         CoopConfig.enable
@@ -422,7 +440,6 @@ class Game_Player
         CoopConfig.show_control_message(CoopTranslations.t(:coop_enabled))
       end
     else
-      # Disable if no other companions
       if CoopConfig.enabled? && (!self.record_companion_name_back || self.record_companion_name_back.empty?)
         CoopConfig.disable
         p "All companions dismissed. Co-op control disabled."
@@ -450,10 +467,9 @@ class Game_Player
   end
 end
 
-#==============================================================================
-# Console Commands
-#==============================================================================
-
+#----------------------------------------------------------------------------
+# Console commands
+#----------------------------------------------------------------------------
 def toggle_coop
   if CoopConfig.enabled?
     CoopConfig.toggle_control_mode
@@ -488,8 +504,6 @@ def coop_status
   comp = CompanionControl.find_front_companion
   p "Found: #{!comp.nil?}"
   p "======================="
-  
-  # Show in game
   if $game_map && $game_map.interpreter
     mode = CoopConfig.get_control_mode
     msg = "Coop: #{CoopConfig.enabled? ? 'ON' : 'OFF'} | #{mode}"
@@ -552,15 +566,11 @@ def test_y_key
   msg = "Y KEY TEST: Command works!"
   print msg + "\n"
   
-  # Show visual confirmation
   if $game_map && $game_map.interpreter
     $game_map.interpreter.call_msg_popup("Test OK - Press Y now")
   end
   
-  # Enable debug
   CoopInput.class_variable_set(:@@debug_mode, true) rescue nil
-  
-  # debug indicator when Y is pressed
   @@y_key_test_mode = true
   
   msg
@@ -571,15 +581,11 @@ def test_check_update
   "Update running: #{count} frames"
 end
 
-def show_companion_skills #not working right now
+def show_companion_skills
   begin
     return "No player" unless $game_player
-    
-    # Find companion
     companion_name = $game_player.record_companion_name_front rescue nil
     return "No companion hired" if !companion_name || companion_name.empty?
-    
-    # Search in map
     companion = $game_map.events.values.find do |event|
       next unless event.respond_to?(:npc) && event.npc
       next unless event.npc.master == $game_player
@@ -590,8 +596,6 @@ def show_companion_skills #not working right now
     
     npc = companion.npc
     return "No NPC" unless npc
-    
-    # Get skill list
     skills_list = npc.skills_killer rescue []
     
     if skills_list.nil? || skills_list.empty?
@@ -672,7 +676,6 @@ def check_companion
     p "Searching in #{$game_map.events.size} events..."
     
     $game_map.events.each do |event_id, event|
-      # skip projectiles/missiles
       next if event.missile
       
       event_name = event.instance_variable_get(:@event).name rescue nil

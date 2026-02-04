@@ -159,6 +159,7 @@ DEFAULT CONFIGURATION:
     "skill4": "NUM4",
     "skill5": "NUM7",
     "skill6": "NUM8",
+    "skill_grab": "NUM2",
     "dodge": "NUM3"
   },
   "system": {
@@ -170,6 +171,7 @@ DEFAULT CONFIGURATION:
 
 COMBAT AND SYSTEM KEYS EXPLANATION:
 -----------------------------------
+NUM2 (skill_grab): Sexual grab (male companions only; list in 03_CompanionControl MALE_COMPANION_NAMES)
 F2 (toggle_control): Switches between AI and manual control
 F3 (force_enable): Enables co-op mode (useful when loading saved games)
 F4 (cycle_companion): Cycle which companion Player 2 controls (front / back)
@@ -247,6 +249,7 @@ CONFIGURACIÓN POR DEFECTO:
     "skill4": "NUM4",
     "skill5": "NUM7",
     "skill6": "NUM8",
+    "skill_grab": "NUM2",
     "dodge": "NUM3"
   },
   "system": {
@@ -258,6 +261,7 @@ CONFIGURACIÓN POR DEFECTO:
 
 EXPLICACIÓN DE TECLAS DE COMBATE Y SISTEMA:
 --------------------------------------------
+NUM2 (skill_grab): Agarre sexual (solo compañeros hombres; lista en 03_CompanionControl MALE_COMPANION_NAMES)
 F2 (toggle_control): Alterna entre control de IA y control manual
 F3 (force_enable): Activa el modo cooperativo (útil al cargar partidas guardadas)
 F4 (cycle_companion): Cambiar qué compañero controla el jugador 2 (frente / trasero)

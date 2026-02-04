@@ -1,8 +1,8 @@
 {
     "id": "CooperativeMode",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "name": "Cooperative mode",
-    "description": "by Goblin Flayer and cleshroal. Allows Player 2 to control the front companion using IJKL+Y/4/5 keys. F3=Enable, F2=Toggle control.",
+    "description": "by Goblin Flayer and cleshroal. Allows Player 2 to control the front companion using IJKL+Y/4/5/+ keys. F3=Enable, F2=Toggle control. Check keybindings guide for more information.",
     "entry": "loader.rb",
     "thumbnail": "preview.png"
 }

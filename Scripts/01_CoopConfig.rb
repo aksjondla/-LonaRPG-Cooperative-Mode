@@ -22,6 +22,7 @@ module CoopConfig
     skill4: :NUM4,
     skill5: :NUM7,
     skill6: :NUM8,
+    skill_grab: :NUM2,
     dodge: :NUM3,
     toggle_control: :F2,
     force_enable: :F3,
@@ -58,6 +59,7 @@ module CoopConfig
         @@keys[:skill4] = config["combat"]["skill4"].to_sym if config["combat"]["skill4"]
         @@keys[:skill5] = config["combat"]["skill5"].to_sym if config["combat"]["skill5"]
         @@keys[:skill6] = config["combat"]["skill6"].to_sym if config["combat"]["skill6"]
+        @@keys[:skill_grab] = config["combat"]["skill_grab"].to_sym if config["combat"]["skill_grab"]
         @@keys[:dodge] = config["combat"]["dodge"].to_sym if config["combat"]["dodge"]
       end
       

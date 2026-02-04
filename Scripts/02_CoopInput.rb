@@ -238,6 +238,7 @@ module CoopInput
     skill4: 11,
     skill5: 12,
     skill6: 13,
+    skill_grab: 14,
     cycle_companion: 15
   }
 
