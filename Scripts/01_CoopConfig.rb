@@ -24,7 +24,8 @@ module CoopConfig
     skill6: :NUM8,
     dodge: :NUM3,
     toggle_control: :F2,
-    force_enable: :F3
+    force_enable: :F3,
+    cycle_companion: :F4
   }
   
   @@keys = DEFAULT_KEYS.dup
@@ -35,13 +36,11 @@ module CoopConfig
     @@keys_loaded = true
     
     begin
-      json_path = "ModScripts/_Mods/Cooperative mode by Goblin Flayer v1.0/keybindings.json"
-      
-      unless File.exist?(json_path)
+      json_path = defined?(COOP_MOD_ROOT) && COOP_MOD_ROOT ? File.join(COOP_MOD_ROOT, "keybindings.json") : nil
+      unless json_path && File.exist?(json_path)
         p "CoopConfig: keybindings.json not found, using defaults"
         return
       end
-      
       json_content = File.read(json_path)
       config = JSON.parse(json_content)
       
@@ -65,6 +64,7 @@ module CoopConfig
       if config["system"]
         @@keys[:toggle_control] = config["system"]["toggle_control"].to_sym if config["system"]["toggle_control"]
         @@keys[:force_enable] = config["system"]["force_enable"].to_sym if config["system"]["force_enable"]
+        @@keys[:cycle_companion] = config["system"]["cycle_companion"].to_sym if config["system"]["cycle_companion"]
       end
       
       p "CoopConfig: Keybindings loaded from keybindings.json"

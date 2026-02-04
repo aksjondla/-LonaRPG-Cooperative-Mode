@@ -40,6 +40,40 @@ module CoopTranslations
       caap: "No disponible (proyectil)",
       russian: "Недоступно (снаряд)"
     },
+    projectile_needs_target: {
+      english: "No target found",
+      caap: "No se encontró objetivo",
+      russian: "Цель не найдена"
+    },
+    max_skeletons: {
+      english: "Max 5 skeletons active",
+      caap: "Máximo 5 esqueletos activos",
+      russian: "Макс. 5 скелетов"
+    },
+    
+    # Cycle companion messages
+    controlling: {
+      english: "Controlling:",
+      caap: "Controlando:",
+      russian: "Управление:"
+    },
+    slot_front: {
+      english: "Front",
+      caap: "Frente",
+      russian: "Передний"
+    },
+    slot_back: {
+      english: "Back",
+      caap: "Trasero",
+      russian: "Задний"
+    },
+    
+    # Target messages (AI handles targeting; we only notify when a valid target is acquired)
+    target_acquired: {
+      english: "Valid target acquired",
+      caap: "Objetivo válido obtenido",
+      russian: "Цель получена"
+    },
     
     # Debug/status messages
     companion_name: {

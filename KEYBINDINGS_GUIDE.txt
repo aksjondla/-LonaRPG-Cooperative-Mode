@@ -75,14 +75,16 @@
   },
   "system": {
     "toggle_control": "F2",
-    "force_enable": "F3"
+    "force_enable": "F3",
+    "cycle_companion": "F4"
   }
 }
 
-ОБЪЯСНЕНИЕ СИСТЕМНЫХ КЛАВИШ:
------------------------------
+ОБЪЯСНЕНИЕ КЛАВИШ БОЯ И СИСТЕМЫ:
+---------------------------------
 F2 (toggle_control): Переключение между ИИ и ручным управлением
 F3 (force_enable): Включает кооперативный режим (полезно при загрузке сохранённых игр)
+F4 (cycle_companion): Переключить управление между передним и задним компаньоном
 
 =============================================================================
 Cooperative Mode - Keybindings Configuration Guide
@@ -161,14 +163,16 @@ DEFAULT CONFIGURATION:
   },
   "system": {
     "toggle_control": "F2",
-    "force_enable": "F3"
+    "force_enable": "F3",
+    "cycle_companion": "F4"
   }
 }
 
-SYSTEM KEYS EXPLANATION:
-------------------------
+COMBAT AND SYSTEM KEYS EXPLANATION:
+-----------------------------------
 F2 (toggle_control): Switches between AI and manual control
 F3 (force_enable): Enables co-op mode (useful when loading saved games)
+F4 (cycle_companion): Cycle which companion Player 2 controls (front / back)
 
 =============================================================================
 Modo Cooperativo - Guía de Configuración de Teclas
@@ -247,11 +251,13 @@ CONFIGURACIÓN POR DEFECTO:
   },
   "system": {
     "toggle_control": "F2",
-    "force_enable": "F3"
+    "force_enable": "F3",
+    "cycle_companion": "F4"
   }
 }
 
-EXPLICACIÓN DE TECLAS DEL SISTEMA:
------------------------------------
+EXPLICACIÓN DE TECLAS DE COMBATE Y SISTEMA:
+--------------------------------------------
 F2 (toggle_control): Alterna entre control de IA y control manual
 F3 (force_enable): Activa el modo cooperativo (útil al cargar partidas guardadas)
+F4 (cycle_companion): Cambiar qué compañero controla el jugador 2 (frente / trasero)
