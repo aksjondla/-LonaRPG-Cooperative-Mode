@@ -20,8 +20,6 @@ module CompanionControl
   @@companion_index = 0
   @@controlled_by_pid = {}
   @@prev_masks_by_pid = {}
-  @@pid_slots = {}
-  @@pipe_forced = false
 
   def self.companion_event_name(companion)
     return nil unless companion && companion.respond_to?(:instance_variable_get)
@@ -99,35 +97,13 @@ module CompanionControl
     end
     @@controlled_by_pid = {}
     @@prev_masks_by_pid = {}
-    @@pid_slots = {}
   end
 
-  def self.valid_companion?(event)
-    return false unless event
-    return false if event.respond_to?(:missile) && event.missile
-    return false unless event.respond_to?(:npc) && event.npc
-    return false unless $game_player
-    return false unless event.npc.master == $game_player
-    true
-  end
-
-  def self.resolve_companion_for_player(pid, npc_id, slot_map)
+  def self.resolve_companion_for_player(npc_id)
     npc_id = npc_id.to_i rescue 0
-    if npc_id > 0
-      begin
-        ev = $game_map && $game_map.events ? $game_map.events[npc_id] : nil
-        return ev if valid_companion?(ev)
-      rescue
-      end
-      if npc_id == 1 || npc_id == 2
-        comp = find_companion_at_index(npc_id - 1)
-        return comp if comp
-      end
-    end
-    slot = slot_map[pid]
-    comp = slot.nil? ? nil : find_companion_at_index(slot)
-    return comp if comp
-    find_front_companion
+    return nil if npc_id <= 0
+    return find_companion_at_index(npc_id - 1) if npc_id == 1 || npc_id == 2
+    nil
   end
 
   def self.update_from_network
@@ -147,19 +123,10 @@ module CompanionControl
       return
     end
 
-    auto_pids = active_players.keys.select { |pid| (active_players[pid][:npc].to_i rescue 0) == 0 }.sort
-    @@pid_slots.delete_if { |pid, _| !auto_pids.include?(pid) }
-    auto_pids.each do |pid|
-      next if @@pid_slots.key?(pid)
-      used = @@pid_slots.values
-      slot = used.include?(0) ? (used.include?(1) ? 0 : 1) : 0
-      @@pid_slots[pid] = slot
-    end
-
     new_controlled = {}
 
     active_players.each do |pid, info|
-      companion = resolve_companion_for_player(pid, info[:npc], @@pid_slots)
+      companion = resolve_companion_for_player(info[:npc])
       next unless companion
       new_controlled[pid] = companion
       disable_companion_ai(companion)
@@ -187,25 +154,6 @@ module CompanionControl
   def self.update
     begin
       CoopInput.update
-
-      if defined?(CoopPipe) && CoopPipe.connected?
-        unless @@pipe_forced
-          companion = find_front_companion
-          if companion
-            unless CoopConfig.enabled?
-              CoopConfig.enable
-              CoopConfig.show_control_message(CoopTranslations.t(:coop_enabled))
-            end
-            if CoopConfig.enabled? && !CoopConfig.manual_control?
-              disable_companion_ai(companion)
-              CoopConfig.toggle_control_mode
-            end
-            @@pipe_forced = true
-          end
-        end
-      else
-        @@pipe_forced = false
-      end
       
       if CoopInput.trigger?(:force_enable)
         unless CoopConfig.enabled?
@@ -240,7 +188,7 @@ module CompanionControl
         return
       end
 
-      if CoopPipe.connected? && CoopPipe.active? && !CoopPipe.players.empty?
+      if CoopPipe.connected? && !CoopPipe.players.empty?
         update_from_network
         return
       end

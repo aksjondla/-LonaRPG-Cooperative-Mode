@@ -333,8 +333,8 @@ module CoopInput
         @@prev_states[key_symbol] = previous
         @@key_states[key_symbol] = current
       else
-        @@prev_states[key_symbol] = @@key_states[key_symbol] || false
-        @@key_states[key_symbol] = false
+        # Keep non-network keys (e.g., F2/F3) as set by CoopInput.update.
+        # Clearing them here causes trigger() to fire repeatedly.
       end
     end
   end
