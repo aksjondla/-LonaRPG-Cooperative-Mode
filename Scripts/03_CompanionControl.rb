@@ -14,10 +14,14 @@ module CompanionControl
 
   @@controlled_companion = nil
   @@debug_counter = 0
-  @@original_move_type = nil
-  @@last_reported_target = nil
-  @@projectile_no_target_balloon_shown = false
+  @@original_move_type_by_comp = {}
+  @@last_reported_target_by_comp = {}
+  @@projectile_no_target_balloon_by_comp = {}
   @@companion_index = 0
+  @@controlled_by_pid = {}
+  @@prev_masks_by_pid = {}
+  @@pid_slots = {}
+  @@pipe_forced = false
 
   def self.companion_event_name(companion)
     return nil unless companion && companion.respond_to?(:instance_variable_get)
@@ -62,26 +66,146 @@ module CompanionControl
   
   def self.disable_companion_ai(companion)
     return unless companion && companion.respond_to?(:get_manual_move_type)
-    if @@original_move_type.nil?
-      @@original_move_type = companion.get_manual_move_type
-      companion.set_manual_move_type(nil)
-    end
+    key = companion.object_id
+    return if @@original_move_type_by_comp.key?(key)
+    @@original_move_type_by_comp[key] = companion.get_manual_move_type
+    companion.set_manual_move_type(nil)
   end
 
   def self.enable_companion_ai(companion)
     return unless companion
     return unless companion.respond_to?(:set_manual_move_type)
     
-    if @@original_move_type
-      companion.set_manual_move_type(@@original_move_type)
-      @@original_move_type = nil
-      @@last_reported_target = nil
+    key = companion.object_id
+    if @@original_move_type_by_comp.key?(key)
+      companion.set_manual_move_type(@@original_move_type_by_comp[key])
+      @@original_move_type_by_comp.delete(key)
+      @@last_reported_target_by_comp.delete(key)
+      @@projectile_no_target_balloon_by_comp.delete(key)
     end
+  end
+
+  def self.controlled_companion?(event)
+    return false unless event
+    return true if @@controlled_companion == event
+    return false unless @@controlled_by_pid && !@@controlled_by_pid.empty?
+    @@controlled_by_pid.values.include?(event)
+  end
+
+  def self.release_network_control(keep_companion = nil)
+    @@controlled_by_pid.each_value do |comp|
+      next if keep_companion && comp == keep_companion
+      enable_companion_ai(comp)
+    end
+    @@controlled_by_pid = {}
+    @@prev_masks_by_pid = {}
+    @@pid_slots = {}
+  end
+
+  def self.valid_companion?(event)
+    return false unless event
+    return false if event.respond_to?(:missile) && event.missile
+    return false unless event.respond_to?(:npc) && event.npc
+    return false unless $game_player
+    return false unless event.npc.master == $game_player
+    true
+  end
+
+  def self.resolve_companion_for_player(pid, npc_id, slot_map)
+    npc_id = npc_id.to_i rescue 0
+    if npc_id > 0
+      begin
+        ev = $game_map && $game_map.events ? $game_map.events[npc_id] : nil
+        return ev if valid_companion?(ev)
+      rescue
+      end
+      if npc_id == 1 || npc_id == 2
+        comp = find_companion_at_index(npc_id - 1)
+        return comp if comp
+      end
+    end
+    slot = slot_map[pid]
+    comp = slot.nil? ? nil : find_companion_at_index(slot)
+    return comp if comp
+    find_front_companion
+  end
+
+  def self.update_from_network
+    players = CoopPipe.players
+    return if players.nil? || players.empty?
+
+    now = CoopPipe.current_frame
+    active_players = {}
+    players.each do |pid, info|
+      next unless info
+      seen = info[:seen] || now
+      next if (now - seen) > CoopPipe::TIMEOUT_FRAMES
+      active_players[pid] = info
+    end
+    if active_players.empty?
+      release_network_control(@@controlled_companion)
+      return
+    end
+
+    auto_pids = active_players.keys.select { |pid| (active_players[pid][:npc].to_i rescue 0) == 0 }.sort
+    @@pid_slots.delete_if { |pid, _| !auto_pids.include?(pid) }
+    auto_pids.each do |pid|
+      next if @@pid_slots.key?(pid)
+      used = @@pid_slots.values
+      slot = used.include?(0) ? (used.include?(1) ? 0 : 1) : 0
+      @@pid_slots[pid] = slot
+    end
+
+    new_controlled = {}
+
+    active_players.each do |pid, info|
+      companion = resolve_companion_for_player(pid, info[:npc], @@pid_slots)
+      next unless companion
+      new_controlled[pid] = companion
+      disable_companion_ai(companion)
+
+      mask = info[:mask] || 0
+      prev_mask = @@prev_masks_by_pid[pid] || 0
+      CoopInput.apply_network_mask(mask, prev_mask)
+      @@prev_masks_by_pid[pid] = mask
+
+      @@controlled_companion = companion
+      update_companion_movement
+      update_companion_actions
+      update_companion_target_message
+      suppress_no_target_balloon
+    end
+
+    old_companions = @@controlled_by_pid.values
+    new_companions = new_controlled.values
+    (old_companions - new_companions).each do |comp|
+      enable_companion_ai(comp)
+    end
+    @@controlled_by_pid = new_controlled
   end
   
   def self.update
     begin
       CoopInput.update
+
+      if defined?(CoopPipe) && CoopPipe.connected?
+        unless @@pipe_forced
+          companion = find_front_companion
+          if companion
+            unless CoopConfig.enabled?
+              CoopConfig.enable
+              CoopConfig.show_control_message(CoopTranslations.t(:coop_enabled))
+            end
+            if CoopConfig.enabled? && !CoopConfig.manual_control?
+              disable_companion_ai(companion)
+              CoopConfig.toggle_control_mode
+            end
+            @@pipe_forced = true
+          end
+        end
+      else
+        @@pipe_forced = false
+      end
       
       if CoopInput.trigger?(:force_enable)
         unless CoopConfig.enabled?
@@ -111,9 +235,18 @@ module CompanionControl
         end
       end
       
-      return unless CoopConfig.enabled?
-      return unless CoopConfig.manual_control?
-      
+      unless CoopConfig.enabled? && CoopConfig.manual_control?
+        release_network_control(@@controlled_companion)
+        return
+      end
+
+      if CoopPipe.connected? && CoopPipe.active? && !CoopPipe.players.empty?
+        update_from_network
+        return
+      end
+
+      release_network_control
+
       @@controlled_companion = find_front_companion
       
       if @@controlled_companion && CoopInput.trigger?(:cycle_companion)
@@ -147,6 +280,7 @@ module CompanionControl
   
   def self.suppress_no_target_balloon
     return unless @@controlled_companion && @@controlled_companion.respond_to?(:npc) && @@controlled_companion.npc
+    key = @@controlled_companion.object_id
     npc = @@controlled_companion.npc
     tgt = npc.instance_variable_get(:@target) rescue nil
     return if tgt && !(tgt.respond_to?(:deleted?) && tgt.deleted?) &&
@@ -248,18 +382,19 @@ module CompanionControl
     return unless @@controlled_companion
     return unless @@controlled_companion.respond_to?(:npc) && @@controlled_companion.npc
     
+    key = @@controlled_companion.object_id
     npc = @@controlled_companion.npc
     tgt = npc.instance_variable_get(:@target) rescue nil
     if tgt.nil?
-      @@last_reported_target = nil
+      @@last_reported_target_by_comp.delete(key)
       return
     end
     return if tgt.respond_to?(:deleted?) && tgt.deleted?
     return if tgt.respond_to?(:actor) && tgt.actor && tgt.actor.action_state == :death
     
-    return if @@last_reported_target == tgt
-    @@last_reported_target = tgt
-    @@projectile_no_target_balloon_shown = false
+    return if @@last_reported_target_by_comp[key] == tgt
+    @@last_reported_target_by_comp[key] = tgt
+    @@projectile_no_target_balloon_by_comp[key] = false
     if $game_map && $game_map.interpreter
       $game_map.interpreter.call_msg_popup(CoopTranslations.t(:target_acquired)) rescue nil
     end
@@ -272,6 +407,7 @@ module CompanionControl
       npc = @@controlled_companion.npc
       return unless npc
       return if npc.action_state == :skill
+      key = @@controlled_companion.object_id
       skills_list = npc.skills_killer rescue []
       skill = skills_list[skill_index] if skills_list && skill_index < skills_list.length
       return unless skill
@@ -279,8 +415,8 @@ module CompanionControl
         tgt = npc.instance_variable_get(:@target) rescue nil
         if tgt.nil? || (tgt.respond_to?(:deleted?) && tgt.deleted?) ||
            (tgt.respond_to?(:actor) && tgt.actor && tgt.actor.action_state == :death)
-          unless @@projectile_no_target_balloon_shown
-            @@projectile_no_target_balloon_shown = true
+          unless @@projectile_no_target_balloon_by_comp[key]
+            @@projectile_no_target_balloon_by_comp[key] = true
             if $game_map && $game_map.interpreter
               $game_map.interpreter.call_msg_popup(CoopTranslations.t(:projectile_needs_target)) rescue nil
             end
@@ -369,7 +505,7 @@ class Game_Event < Game_Character
   def update_self_movement
     return coop_original_update_self_movement if @missile || !@event
     begin
-      if CoopConfig.manual_control? && CompanionControl.controlled_companion_event == self
+      if CoopConfig.manual_control? && CompanionControl.controlled_companion?(self)
         return
       end
     rescue => e
@@ -390,19 +526,19 @@ end
 class Game_NonPlayerCharacter
   alias_method :coop_original_process_killer, :process_killer unless method_defined?(:coop_original_process_killer)
   def process_killer(target, distance, signal, sensor_type)
-    return if CoopConfig.manual_control? && CompanionControl.controlled_companion_event == self.map_token
+    return if CoopConfig.manual_control? && CompanionControl.controlled_companion?(self.map_token)
     coop_original_process_killer(target, distance, signal, sensor_type)
   end
 
   alias_method :coop_original_process_assulter, :process_assulter unless method_defined?(:coop_original_process_assulter)
   def process_assulter(target, distance, signal, sensor_type)
-    return if CoopConfig.manual_control? && CompanionControl.controlled_companion_event == self.map_token
+    return if CoopConfig.manual_control? && CompanionControl.controlled_companion?(self.map_token)
     coop_original_process_assulter(target, distance, signal, sensor_type)
   end
 
   alias_method :coop_original_process_fucker, :process_fucker unless method_defined?(:coop_original_process_fucker)
   def process_fucker(target, distance, signal, sensor_type)
-    return if CoopConfig.manual_control? && CompanionControl.controlled_companion_event == self.map_token
+    return if CoopConfig.manual_control? && CompanionControl.controlled_companion?(self.map_token)
     coop_original_process_fucker(target, distance, signal, sensor_type)
   end
 end

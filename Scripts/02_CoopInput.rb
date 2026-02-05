@@ -196,6 +196,10 @@ module CoopPipe
     @@active_pid
   end
 
+  def self.players
+    @@players || {}
+  end
+
   def self.set_active_pid(pid)
     @@active_pid = pid
   end
@@ -314,6 +318,22 @@ module CoopInput
           @@key_states[key_symbol] = false
         end
       else
+        @@key_states[key_symbol] = false
+      end
+    end
+  end
+
+  def self.apply_network_mask(mask, prev_mask = nil)
+    keys = CoopConfig.keys
+    keys.each do |action, key_symbol|
+      bit = NET_BITS[action]
+      if bit
+        current = ((mask >> bit) & 1) == 1
+        previous = prev_mask ? (((prev_mask >> bit) & 1) == 1) : (@@key_states[key_symbol] || false)
+        @@prev_states[key_symbol] = previous
+        @@key_states[key_symbol] = current
+      else
+        @@prev_states[key_symbol] = @@key_states[key_symbol] || false
         @@key_states[key_symbol] = false
       end
     end
