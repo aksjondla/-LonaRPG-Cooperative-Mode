@@ -25,6 +25,7 @@ module CoopPipe
   TIMEOUT_FRAMES = 10
   DEBUG = false
   DEBUG_EVERY = 30
+  FORCE_SYNC_BIT = 63
 
   GENERIC_READ = 0x80000000
   OPEN_EXISTING = 3
@@ -42,6 +43,7 @@ module CoopPipe
   @@last_packets_parsed = 0
   @@last_mask = 0
   @@last_seq = 0
+  @@force_sync_prev = false
 
   @@create_file = Win32API.new('kernel32', 'CreateFileA', 'PLLPLLL', 'L')
   @@read_file = Win32API.new('kernel32', 'ReadFile', 'LPLPP', 'I')
@@ -152,6 +154,27 @@ module CoopPipe
       off += 16
       mask = lo | (hi << 32)
       players[pid] = { npc: npc, seq: seq, mask: mask, seen: now }
+    end
+
+    begin
+      pressed = false
+      players.each do |_, info|
+        next unless info
+        m = info[:mask] || 0
+        if (((m.to_i >> FORCE_SYNC_BIT) & 1) == 1)
+          pressed = true
+          break
+        end
+      end
+
+      if pressed && !@@force_sync_prev
+        if defined?(CoopCamSender) && CoopCamSender.respond_to?(:request_force_sync)
+          CoopCamSender.request_force_sync
+        end
+      end
+      @@force_sync_prev = pressed
+    rescue
+      @@force_sync_prev = false
     end
 
     @@players = players
